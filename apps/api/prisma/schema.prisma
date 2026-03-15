@@ -12,11 +12,53 @@ model Project {
   name        String
   description String?
   status      ProjectStatus @default(ACTIVE)
+  tickets     Ticket[]
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
+}
+
+model Ticket {
+  id          String       @id @default(uuid())
+  title       String
+  description String?
+  status      TicketStatus @default(TODO)
+  priority    Priority     @default(MEDIUM)
+  projectId   String
+  project     Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  comments    Comment[]
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  @@index([projectId])
+}
+
+model Comment {
+  id        String   @id @default(uuid())
+  content   String
+  author    String
+  ticketId  String
+  ticket    Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([ticketId])
 }
 
 enum ProjectStatus {
   ACTIVE
   ARCHIVED
+}
+
+enum TicketStatus {
+  TODO
+  IN_PROGRESS
+  IN_REVIEW
+  DONE
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
 }
