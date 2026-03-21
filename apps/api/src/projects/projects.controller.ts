@@ -13,6 +13,7 @@ import { Project, ProjectStatus } from '@prisma/client';
 import { ProjectsService } from './projects.service';
 import { CreateProjectDto } from './dto/create-project.dto';
 import { UpdateProjectDto } from './dto/update-project.dto';
+import type { ProjectListQueryResult } from './projects.service';
 
 @Controller('projects')
 export class ProjectsController {
@@ -24,7 +25,7 @@ export class ProjectsController {
   }
 
   @Get()
-  findAll(@Query('status') status?: string): Promise<Project[]> {
+  findAll(@Query('status') status?: string): Promise<ProjectListQueryResult[]> {
     if (!status) {
       return this.projectsService.findAll();
     }

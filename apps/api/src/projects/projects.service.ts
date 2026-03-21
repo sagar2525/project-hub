@@ -1,8 +1,30 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { Project, ProjectStatus } from '@prisma/client';
+import { Prisma, Project, ProjectStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateProjectDto } from './dto/create-project.dto';
 import { UpdateProjectDto } from './dto/update-project.dto';
+
+const projectListSelection = {
+  id: true,
+  name: true,
+  description: true,
+  status: true,
+  createdAt: true,
+  updatedAt: true,
+  _count: {
+    select: {
+      tickets: true,
+    },
+  },
+} satisfies Prisma.ProjectSelect;
+
+export type ProjectListItem = Prisma.ProjectGetPayload<{
+  select: typeof projectListSelection;
+}>;
+
+export type ProjectListQueryResult = Omit<ProjectListItem, '_count'> & {
+  ticketCount: number;
+};
 
 @Injectable()
 export class ProjectsService {
@@ -18,11 +40,17 @@ export class ProjectsService {
     });
   }
 
-  findAll(status?: ProjectStatus): Promise<Project[]> {
-    return this.prisma.project.findMany({
+  async findAll(status?: ProjectStatus): Promise<ProjectListQueryResult[]> {
+    const projects = await this.prisma.project.findMany({
       where: status ? { status } : undefined,
+      select: projectListSelection,
       orderBy: { createdAt: 'desc' },
     });
+
+    return projects.map(({ _count, ...project }) => ({
+      ...project,
+      ticketCount: _count.tickets,
+    }));
   }
 
   async findOne(id: string): Promise<Project> {
