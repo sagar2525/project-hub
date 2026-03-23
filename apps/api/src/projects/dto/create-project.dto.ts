@@ -2,7 +2,7 @@ import { IsEnum, IsOptional, IsString, Length } from 'class-validator';
 import { ProjectStatus } from '@prisma/client';
 
 export class CreateProjectDto {
-  @IsString()
+  @IsString({})
   @Length(3, 100)
   name!: string;
 

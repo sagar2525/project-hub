@@ -1,4 +1,4 @@
-# EXPLANATION: Test and Understand Day 1 to Day 6 (Web + Postman)
+# EXPLANATION: Test and Understand Day 1 to Day 8 (Web + Postman)
 
 This guide is made for your current monorepo:
 - Backend: `apps/api` (NestJS + Prisma + PostgreSQL)
@@ -12,6 +12,15 @@ This guide is made for your current monorepo:
 Note:
 - Browser checks now include both API URLs and frontend dashboard URL.
 - Postman is still best for create/update/delete API requests.
+- Current API responses are wrapped in a standard envelope:
+
+```json
+{
+  "data": {},
+  "message": "Request completed successfully",
+  "statusCode": 200
+}
+```
 
 ## 2) One-Time Setup
 
@@ -38,7 +47,7 @@ pnpm prisma:seed
 
 6. One-time setup is complete.
 
-### Day 6 frontend one-time setup
+### Day 6 to Day 8 frontend one-time setup
 
 In a new terminal:
 
@@ -55,7 +64,7 @@ NEXT_PUBLIC_API_URL="http://localhost:3001"
 
 ### Command to run every time (daily startup)
 
-After one-time setup, every time you want to run the full Day 6 application, use two terminals.
+After one-time setup, every time you want to run the full Day 8 application, use two terminals.
 
 Terminal 1 (API):
 
@@ -112,7 +121,7 @@ pnpm dev
 
 You can open these in browser directly:
 
-0. Day 6 frontend dashboard:
+0. Day 8 frontend dashboard:
    - `http://localhost:3000`
 
 1. Day 1 health:
@@ -130,10 +139,13 @@ You can open these in browser directly:
 5. Day 4 tickets filter:
    - `http://localhost:3001/tickets?status=TODO&priority=HIGH`
 
-6. Day 6 frontend project detail page:
+6. Day 8 frontend project detail page:
    - `http://localhost:3000/projects/<project-id>`
 
-7. Day 6 frontend chat placeholder page:
+7. Day 7 frontend create project page:
+   - `http://localhost:3000/projects/new`
+
+8. Day 6 frontend chat placeholder page:
    - `http://localhost:3000/chat`
 
 Important:
@@ -155,22 +167,22 @@ Important:
 For create project response:
 
 ```javascript
-const data = pm.response.json();
-pm.environment.set("projectId", data.id);
+const response = pm.response.json();
+pm.environment.set("projectId", response.data.id);
 ```
 
 For create ticket response:
 
 ```javascript
-const data = pm.response.json();
-pm.environment.set("ticketId", data.id);
+const response = pm.response.json();
+pm.environment.set("ticketId", response.data.id);
 ```
 
 For create comment response:
 
 ```javascript
-const data = pm.response.json();
-pm.environment.set("commentId", data.id);
+const response = pm.response.json();
+pm.environment.set("commentId", response.data.id);
 ```
 
 ## 5) Day-Wise Postman Endpoint Checklist
@@ -185,7 +197,11 @@ pm.environment.set("commentId", data.id);
 
 ```json
 {
-  "status": "ok"
+  "data": {
+    "status": "ok"
+  },
+  "message": "Request completed successfully",
+  "statusCode": 200
 }
 ```
 
@@ -234,7 +250,7 @@ pm.environment.set("commentId", data.id);
 - Method: `DELETE`
 - URL: `{{baseUrl}}/projects/{{projectId}}`
 - Expected HTTP: `200`
-- Expected `status` in response: `ARCHIVED`
+- Expected `data.status` in response: `ARCHIVED`
 
 ### Request 7: Validation Negative Test
 - Method: `POST`
@@ -418,6 +434,31 @@ Then verify in browser or Postman:
 3. Pick one ticket id and call:
    - `GET {{baseUrl}}/tickets/<ticket-id>/comments`
 
+## 6A) Day 7 and Day 8 Web Flow Checks
+
+Once both API and web are running:
+
+1. Open `http://localhost:3000`
+   - Dashboard should show project cards with ticket counts.
+   - Search box and status filter should update the visible list.
+
+2. Open `http://localhost:3000/projects/new`
+   - Create a project from the UI.
+   - After submit, it should redirect to `/projects/<project-id>`.
+
+3. On the project detail page:
+   - Edit the project inline.
+   - Archive the project from the action panel.
+   - Open the Day 8 ticket board.
+
+4. In the ticket board:
+   - Create a new ticket from the UI.
+   - Filter by status and priority.
+   - Sort by created date, updated date, or priority.
+   - Open a ticket in the detail panel.
+   - Quick-update ticket status from a card dropdown.
+   - Edit or delete the ticket from the detail panel.
+
 ## 7) Fast Troubleshooting
 
 1. `P1000` auth error:
@@ -434,7 +475,7 @@ Then verify in browser or Postman:
 
 ## 8) Final Learning Checklist
 
-You fully verified Day 1 to Day 6 if:
+You fully verified Day 1 to Day 8 if:
 - Health works
 - Projects CRUD works
 - Data persists after server restart
@@ -442,7 +483,9 @@ You fully verified Day 1 to Day 6 if:
 - Comments CRUD works
 - Seed data loads and can be read
 - Dashboard at `http://localhost:3000` shows projects from API
-- Opening `/projects/<id>` in web shows project details and ticket list
+- Opening `/projects/<id>` in web shows project details and ticket board
+- Project creation/edit/archive works from the UI
+- Ticket creation/edit/delete/status updates work from the UI
 
 ## 9) Day-Wise Files, Purpose, and Communication
 
@@ -588,6 +631,56 @@ Communication flow (Day 6 web):
 4. NestJS controller/service fetches from DB via Prisma.
 5. Response comes back to web and renders project cards.
 6. Clicking a project card navigates to `/projects/[projectId]`, which fetches project + tickets.
+
+## Day 7 - Projects UI (Create/Edit/Archive + Dashboard Filters)
+
+Files created/updated:
+- `apps/web/app/page.tsx`
+- `apps/web/app/projects/new/page.tsx`
+- `apps/web/components/DashboardFilters.tsx`
+- `apps/web/components/ProjectForm.tsx`
+- `apps/web/components/ProjectDetailActions.tsx`
+- `apps/web/app/projects/[projectId]/page.tsx`
+- `apps/web/lib/api.ts`
+
+Purpose:
+- `app/page.tsx`: dashboard now supports search and ACTIVE/ARCHIVED filtering.
+- `app/projects/new/page.tsx`: dedicated create-project page.
+- `DashboardFilters.tsx`: client-side search + status controls that sync to URL query params.
+- `ProjectForm.tsx`: reusable create/edit form for projects.
+- `ProjectDetailActions.tsx`: edit and archive controls on project detail page.
+- `lib/api.ts`: create/update/archive project helpers for the frontend.
+
+Communication flow (Day 7 web):
+1. User opens dashboard or `/projects/new`.
+2. Client form submits to NestJS project endpoints through `lib/api.ts`.
+3. NestJS validates DTO input and updates PostgreSQL via Prisma.
+4. The UI redirects or refreshes and shows updated project data.
+
+## Day 8 - Tickets UI (Board View + CRUD)
+
+Files created/updated:
+- `apps/web/components/TicketBoard.tsx`
+- `apps/web/app/projects/[projectId]/page.tsx`
+- `apps/web/lib/api.ts`
+- `src/tickets/tickets.controller.ts`
+- `src/tickets/tickets.service.ts`
+
+Purpose:
+- `TicketBoard.tsx`: Day 8 ticket board UI grouped by status with filters, sorting, create form, quick status updates, and a ticket detail panel.
+- `projects/[projectId]/page.tsx`: project detail page now renders the interactive ticket board instead of a static preview.
+- `lib/api.ts`: adds ticket create/update/delete helpers and project-ticket query options.
+- `tickets.controller.ts`: project-ticket route now accepts sort options.
+- `tickets.service.ts`: returns flattened `commentCount` values and supports richer ticket list sorting for the Day 8 UI.
+
+Communication flow (Day 8 web):
+1. User opens a project detail page.
+2. Server fetches project data and initial project tickets.
+3. `TicketBoard.tsx` renders columns for `TODO`, `IN_PROGRESS`, `IN_REVIEW`, and `DONE`.
+4. Filter and sort controls request updated ticket lists from `/projects/:projectId/tickets`.
+5. Ticket create/update/delete actions call NestJS ticket endpoints through `lib/api.ts`.
+6. NestJS validates DTOs, updates PostgreSQL via Prisma, and returns wrapped API responses.
+7. The client board updates with the latest ticket state.
 
 ## 10) Database Setup and How It Works (Day 3 Onward)
 

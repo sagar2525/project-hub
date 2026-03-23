@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { ProjectDetailActions } from '@/components/ProjectDetailActions';
+import { TicketBoard } from '@/components/TicketBoard';
 import { ApiError, getProjectById, getTicketsByProject } from '@/lib/api';
 
 interface ProjectPageProps {
@@ -33,23 +34,14 @@ export default async function ProjectDetailPage({ params }: ProjectPageProps) {
           </div>
         </header>
 
-        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-          <h3 className="mb-3 text-lg font-semibold text-slate-900">Tickets (basic preview)</h3>
+        <div>
           {ticketsResult.error ? (
-            <p className="text-sm text-amber-700">{ticketsResult.error}</p>
-          ) : ticketsResult.tickets.length === 0 ? (
-            <p className="text-sm text-slate-600">No tickets yet for this project.</p>
+            <div className="rounded-xl border border-amber-200 bg-amber-50 p-5 text-amber-900">
+              <h3 className="text-lg font-semibold">Could not load tickets</h3>
+              <p className="mt-2 text-sm">{ticketsResult.error}</p>
+            </div>
           ) : (
-            <ul className="space-y-2">
-              {ticketsResult.tickets.map((ticket) => (
-                <li key={ticket.id} className="rounded-md border border-slate-200 p-3">
-                  <p className="font-medium text-slate-900">{ticket.title}</p>
-                  <p className="text-sm text-slate-600">
-                    {ticket.status} | {ticket.priority}
-                  </p>
-                </li>
-              ))}
-            </ul>
+            <TicketBoard projectId={project.id} initialTickets={ticketsResult.tickets} />
           )}
         </div>
 

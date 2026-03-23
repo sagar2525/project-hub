@@ -12,7 +12,7 @@ import {
 import { Priority, Ticket, TicketStatus } from '@prisma/client';
 import { CreateTicketDto } from './dto/create-ticket.dto';
 import { UpdateTicketDto } from './dto/update-ticket.dto';
-import { TicketsService } from './tickets.service';
+import { TicketListQueryResult, TicketsService } from './tickets.service';
 
 @Controller()
 export class TicketsController {
@@ -31,11 +31,15 @@ export class TicketsController {
     @Param('projectId') projectId: string,
     @Query('status') status?: string,
     @Query('priority') priority?: string,
-  ): Promise<Ticket[]> {
+    @Query('sortBy') sortBy?: string,
+    @Query('sortOrder') sortOrder?: string,
+  ): Promise<TicketListQueryResult[]> {
     return this.ticketsService.findByProject(
       projectId,
       this.parseStatus(status),
       this.parsePriority(priority),
+      this.parseSortBy(sortBy),
+      this.parseSortOrder(sortOrder),
     );
   }
 
@@ -46,7 +50,7 @@ export class TicketsController {
     @Query('priority') priority?: string,
     @Query('sortBy') sortBy?: string,
     @Query('sortOrder') sortOrder?: string,
-  ): Promise<Ticket[]> {
+  ): Promise<TicketListQueryResult[]> {
     return this.ticketsService.findAll({
       projectId,
       status: this.parseStatus(status),
@@ -102,13 +106,19 @@ export class TicketsController {
     return priority as Priority;
   }
 
-  private parseSortBy(sortBy?: string): 'createdAt' | 'updatedAt' {
+  private parseSortBy(sortBy?: string): 'createdAt' | 'updatedAt' | 'priority' {
     if (!sortBy) {
       return 'createdAt';
     }
 
-    if (sortBy !== 'createdAt' && sortBy !== 'updatedAt') {
-      throw new BadRequestException('sortBy must be createdAt or updatedAt');
+    if (
+      sortBy !== 'createdAt' &&
+      sortBy !== 'updatedAt' &&
+      sortBy !== 'priority'
+    ) {
+      throw new BadRequestException(
+        'sortBy must be createdAt, updatedAt or priority',
+      );
     }
 
     return sortBy;

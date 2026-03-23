@@ -4,11 +4,35 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CreateTicketDto } from './dto/create-ticket.dto';
 import { UpdateTicketDto } from './dto/update-ticket.dto';
 
+const ticketListSelection = {
+  id: true,
+  title: true,
+  description: true,
+  status: true,
+  priority: true,
+  projectId: true,
+  createdAt: true,
+  updatedAt: true,
+  _count: {
+    select: {
+      comments: true,
+    },
+  },
+} satisfies Prisma.TicketSelect;
+
+export type TicketListItem = Prisma.TicketGetPayload<{
+  select: typeof ticketListSelection;
+}>;
+
+export type TicketListQueryResult = Omit<TicketListItem, '_count'> & {
+  commentCount: number;
+};
+
 interface FindAllTicketsOptions {
   projectId?: string;
   status?: TicketStatus;
   priority?: Priority;
-  sortBy?: 'createdAt' | 'updatedAt';
+  sortBy?: 'createdAt' | 'updatedAt' | 'priority';
   sortOrder?: 'asc' | 'desc';
 }
 
@@ -33,37 +57,48 @@ export class TicketsService {
     projectId: string,
     status?: TicketStatus,
     priority?: Priority,
-  ): Promise<Ticket[]> {
+    sortBy: 'createdAt' | 'updatedAt' | 'priority' = 'createdAt',
+    sortOrder: 'asc' | 'desc' = 'desc',
+  ): Promise<TicketListQueryResult[]> {
     await this.ensureProjectExists(projectId);
-    return this.prisma.ticket.findMany({
+    const tickets = await this.prisma.ticket.findMany({
       where: {
         projectId,
         status,
         priority,
       },
-      orderBy: { createdAt: 'desc' },
+      select: ticketListSelection,
+      orderBy: this.buildOrderBy(sortBy, sortOrder),
     });
+
+    return tickets.map(({ _count, ...ticket }) => ({
+      ...ticket,
+      commentCount: _count.comments,
+    }));
   }
 
-  async findAll(options: FindAllTicketsOptions = {}): Promise<Ticket[]> {
+  async findAll(options: FindAllTicketsOptions = {}): Promise<TicketListQueryResult[]> {
     if (options.projectId) {
       await this.ensureProjectExists(options.projectId);
     }
 
     const sortBy = options.sortBy ?? 'createdAt';
     const sortOrder = options.sortOrder ?? 'desc';
-    const orderBy = {
-      [sortBy]: sortOrder,
-    } as Prisma.TicketOrderByWithRelationInput;
 
-    return this.prisma.ticket.findMany({
+    const tickets = await this.prisma.ticket.findMany({
       where: {
         projectId: options.projectId,
         status: options.status,
         priority: options.priority,
       },
-      orderBy,
+      select: ticketListSelection,
+      orderBy: this.buildOrderBy(sortBy, sortOrder),
     });
+
+    return tickets.map(({ _count, ...ticket }) => ({
+      ...ticket,
+      commentCount: _count.comments,
+    }));
   }
 
   async findOne(id: string): Promise<Ticket> {
@@ -99,5 +134,18 @@ export class TicketsService {
     if (!project) {
       throw new NotFoundException(`Project ${projectId} not found`);
     }
+  }
+
+  private buildOrderBy(
+    sortBy: 'createdAt' | 'updatedAt' | 'priority',
+    sortOrder: 'asc' | 'desc',
+  ): Prisma.TicketOrderByWithRelationInput | Prisma.TicketOrderByWithRelationInput[] {
+    if (sortBy === 'priority') {
+      return [{ priority: sortOrder }, { createdAt: 'desc' }, { id: 'desc' }];
+    }
+
+    return {
+      [sortBy]: sortOrder,
+    } as Prisma.TicketOrderByWithRelationInput;
   }
 }

@@ -16,7 +16,7 @@ const ibmPlexMono = IBM_Plex_Mono({
 
 export const metadata: Metadata = {
   title: 'ProjectHub Dashboard',
-  description: 'Day 6 beginner frontend for ProjectHub',
+  description: 'frontend for ProjectHub',
 };
 
 export default function RootLayout({
