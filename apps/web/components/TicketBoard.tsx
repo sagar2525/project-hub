@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ApiError,
   createTicket,
@@ -11,6 +11,7 @@ import {
   type TicketSummary,
   updateTicket,
 } from '@/lib/api';
+import { TicketComments } from '@/components/TicketComments';
 
 const ticketStatuses: Ticket['status'][] = [
   'TODO',
@@ -113,6 +114,15 @@ export function TicketBoard({ projectId, initialTickets }: TicketBoardProps) {
         tickets: tickets.filter((ticket) => ticket.status === status),
       })),
     [tickets],
+  );
+
+  const updateTicketInState = useCallback(
+    (ticketId: string, updater: (ticket: TicketSummary) => TicketSummary) => {
+      setTickets((current) =>
+        current.map((ticket) => (ticket.id === ticketId ? updater(ticket) : ticket)),
+      );
+    },
+    [],
   );
 
   async function handleCreateTicket(payload: TicketPayload) {
@@ -322,6 +332,12 @@ export function TicketBoard({ projectId, initialTickets }: TicketBoardProps) {
                           <span className="text-xs text-slate-500">
                             {ticket.commentCount} comment{ticket.commentCount === 1 ? '' : 's'}
                           </span>
+                          <span className="text-xs text-slate-400">
+                            Updated {new Date(ticket.updatedAt).toLocaleDateString()}
+                          </span>
+                        </div>
+
+                        <div className="mt-3 flex items-center justify-between gap-3">
                           <select
                             value={ticket.status}
                             onChange={(event) =>
@@ -358,6 +374,13 @@ export function TicketBoard({ projectId, initialTickets }: TicketBoardProps) {
                 ticket={selectedTicket}
                 onDelete={handleDeleteTicket}
                 onUpdate={handleUpdateTicket}
+                onCommentCountChange={(nextCount) =>
+                  updateTicketInState(selectedTicket.id, (currentTicket) => ({
+                    ...currentTicket,
+                    commentCount: nextCount,
+                    updatedAt: new Date().toISOString(),
+                  }))
+                }
               />
             ) : (
               <div className="flex h-full min-h-72 items-center justify-center rounded-xl border border-dashed border-slate-200 bg-slate-50 p-6 text-center text-sm text-slate-500">
@@ -511,12 +534,14 @@ interface TicketDetailPanelProps {
   ticket: TicketSummary;
   onUpdate: (ticketId: string, payload: TicketPayload) => Promise<void>;
   onDelete: (ticketId: string) => Promise<void>;
+  onCommentCountChange: (nextCount: number) => void;
 }
 
 function TicketDetailPanel({
   ticket,
   onUpdate,
   onDelete,
+  onCommentCountChange,
 }: TicketDetailPanelProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -572,10 +597,7 @@ function TicketDetailPanel({
         {ticket.description || 'No description available for this ticket yet.'}
       </p>
 
-      <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">
-        Comments UI will be added on Day 9. This panel is reserved for ticket discussion and
-        activity.
-      </div>
+      <TicketComments ticketId={ticket.id} onCommentCountChange={onCommentCountChange} />
 
       {error ? (
         <p className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">

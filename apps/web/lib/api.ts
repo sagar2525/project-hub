@@ -54,6 +54,15 @@ export interface TicketSummary extends Ticket {
   commentCount: number;
 }
 
+export interface Comment {
+  id: string;
+  content: string;
+  author: string;
+  ticketId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface TicketPayload {
   title?: string;
   description?: string;
@@ -66,6 +75,11 @@ export interface TicketQueryOptions {
   priority?: Ticket['priority'];
   sortBy?: 'createdAt' | 'updatedAt' | 'priority';
   sortOrder?: 'asc' | 'desc';
+}
+
+export interface CommentPayload {
+  author?: string;
+  content?: string;
 }
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
@@ -164,6 +178,36 @@ export async function updateTicket(
 
 export async function deleteTicket(ticketId: string): Promise<Ticket> {
   return request<Ticket>(`/tickets/${ticketId}`, {
+    method: 'DELETE',
+  });
+}
+
+export async function getCommentsByTicket(ticketId: string): Promise<Comment[]> {
+  return request<Comment[]>(`/tickets/${ticketId}/comments`);
+}
+
+export async function createComment(
+  ticketId: string,
+  payload: Required<CommentPayload>,
+): Promise<Comment> {
+  return request<Comment>(`/tickets/${ticketId}/comments`, {
+    method: 'POST',
+    body: payload,
+  });
+}
+
+export async function updateComment(
+  commentId: string,
+  payload: CommentPayload,
+): Promise<Comment> {
+  return request<Comment>(`/comments/${commentId}`, {
+    method: 'PATCH',
+    body: payload,
+  });
+}
+
+export async function deleteComment(commentId: string): Promise<Comment> {
+  return request<Comment>(`/comments/${commentId}`, {
     method: 'DELETE',
   });
 }
