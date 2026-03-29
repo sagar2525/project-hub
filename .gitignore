@@ -1,3 +1,4 @@
 node_modules
 .vscode/
 plan/
+.pnpm-store/

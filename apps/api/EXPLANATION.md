@@ -1,4 +1,4 @@
-# EXPLANATION: Test and Understand Day 1 to Day 8 (Web + Postman)
+# EXPLANATION: Test and Understand Day 1 to Day 10 (Web + Postman)
 
 This guide is made for your current monorepo:
 - Backend: `apps/api` (NestJS + Prisma + PostgreSQL)
@@ -47,7 +47,7 @@ pnpm prisma:seed
 
 6. One-time setup is complete.
 
-### Day 6 to Day 8 frontend one-time setup
+### Day 6 to Day 10 frontend one-time setup
 
 In a new terminal:
 
@@ -64,7 +64,7 @@ NEXT_PUBLIC_API_URL="http://localhost:3001"
 
 ### Command to run every time (daily startup)
 
-After one-time setup, every time you want to run the full Day 8 application, use two terminals.
+After one-time setup, every time you want to run the full Day 10 application, use two terminals.
 
 Terminal 1 (API):
 
@@ -121,7 +121,7 @@ pnpm dev
 
 You can open these in browser directly:
 
-0. Day 8 frontend dashboard:
+0. Day 10 frontend dashboard:
    - `http://localhost:3000`
 
 1. Day 1 health:
@@ -139,7 +139,7 @@ You can open these in browser directly:
 5. Day 4 tickets filter:
    - `http://localhost:3001/tickets?status=TODO&priority=HIGH`
 
-6. Day 8 frontend project detail page:
+6. Day 9 frontend project detail page:
    - `http://localhost:3000/projects/<project-id>`
 
 7. Day 7 frontend create project page:
@@ -434,7 +434,7 @@ Then verify in browser or Postman:
 3. Pick one ticket id and call:
    - `GET {{baseUrl}}/tickets/<ticket-id>/comments`
 
-## 6A) Day 7 and Day 8 Web Flow Checks
+## 6A) Day 7 to Day 10 Web Flow Checks
 
 Once both API and web are running:
 
@@ -459,6 +459,13 @@ Once both API and web are running:
    - Quick-update ticket status from a card dropdown.
    - Edit or delete the ticket from the detail panel.
 
+5. In the ticket detail panel:
+   - View comments in newest-first order.
+   - Add a comment with author name and content.
+   - Edit a comment inline.
+   - Delete a comment.
+   - Verify the ticket card comment count updates after comment changes.
+
 ## 7) Fast Troubleshooting
 
 1. `P1000` auth error:
@@ -475,7 +482,7 @@ Once both API and web are running:
 
 ## 8) Final Learning Checklist
 
-You fully verified Day 1 to Day 8 if:
+You fully verified Day 1 to Day 10 if:
 - Health works
 - Projects CRUD works
 - Data persists after server restart
@@ -486,6 +493,10 @@ You fully verified Day 1 to Day 8 if:
 - Opening `/projects/<id>` in web shows project details and ticket board
 - Project creation/edit/archive works from the UI
 - Ticket creation/edit/delete/status updates work from the UI
+- Comment creation/edit/delete works from the UI
+- Ticket cards show comment count and last updated activity information
+- `Embedding` schema and migration files exist for Day 10
+- `pnpm embeddings:test` starts correctly and only requires `OPENAI_API_KEY` to finish
 
 ## 9) Day-Wise Files, Purpose, and Communication
 
@@ -681,6 +692,57 @@ Communication flow (Day 8 web):
 5. Ticket create/update/delete actions call NestJS ticket endpoints through `lib/api.ts`.
 6. NestJS validates DTOs, updates PostgreSQL via Prisma, and returns wrapped API responses.
 7. The client board updates with the latest ticket state.
+
+## Day 9 - Comments UI + Activity Indicators
+
+Files created/updated:
+- `apps/web/components/TicketComments.tsx`
+- `apps/web/components/TicketBoard.tsx`
+- `apps/web/lib/api.ts`
+
+Purpose:
+- `TicketComments.tsx`: Day 9 comments UI inside the ticket detail panel, including list, create form, inline edit, and delete actions.
+- `TicketBoard.tsx`: now shows activity details on ticket cards such as comment count and last updated date, and wires comment count updates back into board state.
+- `lib/api.ts`: adds frontend helpers for `getCommentsByTicket`, `createComment`, `updateComment`, and `deleteComment`.
+
+Communication flow (Day 9 web):
+1. User opens a ticket from the Day 8 board.
+2. The ticket detail panel renders `TicketComments.tsx`.
+3. `TicketComments.tsx` fetches comments from `/tickets/:ticketId/comments`.
+4. Add, edit, and delete actions call the comments API endpoints through `lib/api.ts`.
+5. NestJS comments controller/service validates input and updates PostgreSQL through Prisma.
+6. The comment list refreshes in local state, and the parent ticket card updates its `commentCount`.
+
+Implementation note:
+- The Day 9 UI is implemented.
+- Full integration testing from the Day 9 plan is still a separate step and is not being claimed as completed in this document.
+
+## Day 10 - Embeddings Intro + pgvector Setup
+
+Files created/updated:
+- `prisma/schema.prisma`
+- `prisma/migrations/20260329090000_add_embeddings/migration.sql`
+- `scripts/test-embeddings.ts`
+- `scripts/pgvector-example.sql`
+- `package.json`
+
+Purpose:
+- `schema.prisma`: adds the `Embedding` model with a pgvector-backed `vector(1536)` field.
+- `migration.sql`: creates the `vector` extension and the `Embedding` table/index.
+- `test-embeddings.ts`: standalone script that loads sample ticket titles, generates embeddings with `text-embedding-3-small`, prints vector previews, and compares cosine similarity.
+- `pgvector-example.sql`: raw SQL reference for inserting an embedding row and doing similarity search with `<=>`.
+- `package.json`: adds the `embeddings:test` script and the OpenAI/LangChain dependencies needed for Day 10 work.
+
+Communication flow (Day 10 backend):
+1. Developer runs `pnpm embeddings:test` from `apps/api`.
+2. The script loads `.env`, checks `OPENAI_API_KEY`, and creates an `OpenAIEmbeddings` client.
+3. Sample ticket titles are embedded with `text-embedding-3-small`.
+4. The script prints vector length/previews and cosine similarity comparisons.
+5. The `Embedding` Prisma model and migration define where vectors will be stored in PostgreSQL with pgvector.
+
+Implementation note:
+- Day 10 schema and scripts are implemented.
+- The script currently stops with a clear error until `OPENAI_API_KEY` is added to `apps/api/.env`.
 
 ## 10) Database Setup and How It Works (Day 3 Onward)
 

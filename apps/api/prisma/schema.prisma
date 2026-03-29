@@ -44,6 +44,18 @@ model Comment {
   @@index([ticketId])
 }
 
+model Embedding {
+  id         String                    @id @default(uuid())
+  content    String
+  embedding  Unsupported("vector(1536)")
+  sourceType String
+  sourceId   String
+  metadata   Json?
+  createdAt  DateTime                  @default(now())
+
+  @@index([sourceType, sourceId])
+}
+
 enum ProjectStatus {
   ACTIVE
   ARCHIVED
