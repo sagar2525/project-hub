@@ -1,5 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { PrismaClient } from '@prisma/client';
 import { OpenAIEmbeddings } from '@langchain/openai';
 
 const sampleTitles = [
@@ -9,6 +10,16 @@ const sampleTitles = [
   'Payment gateway timeout issue',
   'Redesign onboarding screen',
 ];
+
+const prisma = new PrismaClient();
+
+function escapeSql(value: string): string {
+  return value.replace(/'/g, "''");
+}
+
+function vectorLiteral(values: number[]): string {
+  return `[${values.map((value) => value.toFixed(8)).join(',')}]`;
+}
 
 function loadDotEnvFile(): void {
   const envPath = join(process.cwd(), '.env');
@@ -70,6 +81,8 @@ async function main(): Promise<void> {
   console.log('Generating embeddings with text-embedding-3-small...\n');
 
   const vectors = await embeddings.embedDocuments(sampleTitles);
+  const queryText = 'Authentication sign in issue';
+  const queryVector = await embeddings.embedQuery(queryText);
 
   sampleTitles.forEach((title, index) => {
     const preview = vectors[index].slice(0, 6).map((value) => value.toFixed(4));
@@ -95,10 +108,64 @@ async function main(): Promise<void> {
   }
 
   console.log('\nExpected pattern: authentication/login titles should be closer to each other than to unrelated UI work.');
+
+  await prisma.$executeRawUnsafe('CREATE EXTENSION IF NOT EXISTS vector');
+  await prisma.$executeRawUnsafe(
+    `DELETE FROM "Embedding" WHERE "sourceType" = 'script-demo'`,
+  );
+
+  for (const [index, title] of sampleTitles.entries()) {
+    const embedding = vectorLiteral(vectors[index]);
+    const content = `Ticket title: ${title}`;
+    const metadata = JSON.stringify({
+      script: 'test-embeddings',
+      sampleIndex: index + 1,
+      title,
+    });
+
+    await prisma.$executeRawUnsafe(`
+      INSERT INTO "Embedding" (
+        "id",
+        "content",
+        "embedding",
+        "sourceType",
+        "sourceId",
+        "metadata",
+        "createdAt"
+      ) VALUES (
+        gen_random_uuid()::text,
+        '${escapeSql(content)}',
+        '${embedding}'::vector,
+        'script-demo',
+        'sample-${index + 1}',
+        '${escapeSql(metadata)}'::jsonb,
+        NOW()
+      )
+    `);
+  }
+
+  console.log('\nStored generated embeddings in PostgreSQL using the Embedding table.');
+
+  const searchResults = await prisma.$queryRawUnsafe(`
+    SELECT
+      "content",
+      "sourceId",
+      "metadata",
+      ("embedding" <=> '${vectorLiteral(queryVector)}'::vector) AS distance
+    FROM "Embedding"
+    WHERE "sourceType" = 'script-demo'
+    ORDER BY "embedding" <=> '${vectorLiteral(queryVector)}'::vector
+    LIMIT 3
+  `);
+
+  console.log(`\nSimilarity search results for query: "${queryText}"\n`);
+  console.table(searchResults);
 }
 
 main().catch((error: unknown) => {
   console.error('\nEmbedding test failed.');
   console.error(error);
   process.exit(1);
+}).finally(async () => {
+  await prisma.$disconnect();
 });

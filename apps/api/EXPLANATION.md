@@ -32,6 +32,7 @@ pnpm install
 ```
 
 3. Ensure `.env` has correct `DATABASE_URL`.
+   - For Day 10 embedding script, also add `OPENAI_API_KEY`.
 4. Run migration + Prisma client generation:
 
 ```powershell
@@ -139,13 +140,16 @@ You can open these in browser directly:
 5. Day 4 tickets filter:
    - `http://localhost:3001/tickets?status=TODO&priority=HIGH`
 
-6. Day 9 frontend project detail page:
+6. Day 4 single ticket detail:
+   - `http://localhost:3001/tickets/<ticket-id>`
+
+7. Day 9 frontend project detail page:
    - `http://localhost:3000/projects/<project-id>`
 
-7. Day 7 frontend create project page:
+8. Day 7 frontend create project page:
    - `http://localhost:3000/projects/new`
 
-8. Day 6 frontend chat placeholder page:
+9. Day 6 frontend chat placeholder page:
    - `http://localhost:3000/chat`
 
 Important:
@@ -331,6 +335,8 @@ Expected:
 - Method: `GET`
 - URL: `{{baseUrl}}/tickets/{{ticketId}}`
 - Expected HTTP: `200`
+- Expected `data.project.name` to exist
+- Expected `data.commentCount` to exist
 
 ### Request 13: Update Ticket
 - Method: `PATCH`
@@ -426,13 +432,23 @@ pnpm prisma:seed
 Then verify in browser or Postman:
 
 1. `GET {{baseUrl}}/projects`
-   - Look for `Intern Demo Project`
+   - Should return 3 seeded projects
+   - Example names:
+     - `E-Commerce Platform`
+     - `Mobile App Redesign`
+     - `API Gateway Migration`
 
 2. `GET {{baseUrl}}/tickets`
-   - Should contain seeded tickets
+   - Should return a larger list of seeded tickets across projects
+   - Each ticket list item should include `commentCount`
 
 3. Pick one ticket id and call:
    - `GET {{baseUrl}}/tickets/<ticket-id>/comments`
+   - Should return multiple seeded comments
+
+4. Check database-backed embedding foundation after running migration:
+   - `SELECT * FROM "Embedding";`
+   - Table should exist even before you insert embedding rows
 
 ## 6A) Day 7 to Day 10 Web Flow Checks
 
@@ -466,6 +482,15 @@ Once both API and web are running:
    - Delete a comment.
    - Verify the ticket card comment count updates after comment changes.
 
+6. For Day 10 embedding verification:
+   - Add `OPENAI_API_KEY` to `apps/api/.env`.
+   - Run `pnpm embeddings:test`.
+   - Verify the script:
+     - prints vector length and preview values
+     - prints cosine similarity comparisons
+     - inserts demo rows into `Embedding`
+     - runs similarity search against PostgreSQL
+
 ## 7) Fast Troubleshooting
 
 1. `P1000` auth error:
@@ -495,8 +520,10 @@ You fully verified Day 1 to Day 10 if:
 - Ticket creation/edit/delete/status updates work from the UI
 - Comment creation/edit/delete works from the UI
 - Ticket cards show comment count and last updated activity information
+- `GET /tickets/:id` returns related project data and comment count
+- Seed data contains multiple realistic projects, tickets, and comments
 - `Embedding` schema and migration files exist for Day 10
-- `pnpm embeddings:test` starts correctly and only requires `OPENAI_API_KEY` to finish
+- `pnpm embeddings:test` can generate vectors, store them in PostgreSQL, and query them back with similarity search
 
 ## 9) Day-Wise Files, Purpose, and Communication
 
@@ -579,13 +606,15 @@ Purpose:
 - Add ticket CRUD linked to a project.
 - Add filter support (status, priority, sorting).
 - Validate ticket payload with DTOs.
+- Single ticket detail now includes related project info and comment count.
 
 Communication flow:
 1. Client hits routes like `/projects/:projectId/tickets` or `/tickets`.
 2. `tickets.controller.ts` validates query/path/body values.
 3. `tickets.service.ts` checks project existence when needed.
 4. Service calls Prisma `ticket` queries.
-5. DB returns result and response is sent.
+5. For `GET /tickets/:id`, Prisma includes the related project and comment count.
+6. DB returns result and response is sent.
 
 ## Day 5 - Comments Module + Seed Data
 
@@ -599,7 +628,7 @@ Files:
 
 Purpose:
 - Add comment CRUD linked to tickets.
-- Seed sample data for quick testing and learning.
+- Seed richer sample data for quick testing, UI flows, and later RAG-style retrieval.
 
 Communication flow:
 1. Client hits `/tickets/:ticketId/comments` or `/comments/:id`.
@@ -610,6 +639,11 @@ Communication flow:
 
 Note:
 - In this implementation, schema expansion for tickets and comments is applied together in migration `20260315192207_add_tickets_comments`.
+- The current seed script now creates:
+  - 3 projects
+  - 24 tickets total
+  - 72 comments total
+- This is much closer to the Day 5 plan than the original minimal seed.
 
 ## Day 6 - Next.js Frontend (Basic Fresher Version)
 
@@ -729,8 +763,8 @@ Files created/updated:
 Purpose:
 - `schema.prisma`: adds the `Embedding` model with a pgvector-backed `vector(1536)` field.
 - `migration.sql`: creates the `vector` extension and the `Embedding` table/index.
-- `test-embeddings.ts`: standalone script that loads sample ticket titles, generates embeddings with `text-embedding-3-small`, prints vector previews, and compares cosine similarity.
-- `pgvector-example.sql`: raw SQL reference for inserting an embedding row and doing similarity search with `<=>`.
+- `test-embeddings.ts`: standalone script that loads sample ticket titles, generates embeddings with `text-embedding-3-small`, prints vector previews, compares cosine similarity, stores the generated vectors in PostgreSQL, and performs similarity search against the `Embedding` table.
+- `pgvector-example.sql`: raw SQL reference for inserting a valid `vector(1536)` row and doing similarity search with `<=>`.
 - `package.json`: adds the `embeddings:test` script and the OpenAI/LangChain dependencies needed for Day 10 work.
 
 Communication flow (Day 10 backend):
@@ -738,11 +772,15 @@ Communication flow (Day 10 backend):
 2. The script loads `.env`, checks `OPENAI_API_KEY`, and creates an `OpenAIEmbeddings` client.
 3. Sample ticket titles are embedded with `text-embedding-3-small`.
 4. The script prints vector length/previews and cosine similarity comparisons.
-5. The `Embedding` Prisma model and migration define where vectors will be stored in PostgreSQL with pgvector.
+5. The script ensures the `vector` extension exists in PostgreSQL.
+6. The script inserts generated vectors into the `Embedding` table using raw SQL and pgvector casting.
+7. The script runs similarity search against stored rows using the `<=>` distance operator.
+8. The `Embedding` Prisma model and migration define the database shape that makes this possible.
 
 Implementation note:
-- Day 10 schema and scripts are implemented.
-- The script currently stops with a clear error until `OPENAI_API_KEY` is added to `apps/api/.env`.
+- Day 10 schema, script, and raw SQL example are implemented.
+- The script requires `OPENAI_API_KEY` in `apps/api/.env`.
+- Without that key, the script fails fast with a clear configuration error before making API calls.
 
 ## 10) Database Setup and How It Works (Day 3 Onward)
 
@@ -751,12 +789,16 @@ Implementation note:
 1. Install PostgreSQL and keep service running.
 2. Put DB URL in `.env`:
    - `DATABASE_URL="postgresql://<user>:<password>@localhost:5432/projecthub_dev?schema=public"`
-3. Run migration:
+3. For Day 10, also add:
+   - `OPENAI_API_KEY="<your-openai-key>"`
+4. Run migration:
    - `pnpm prisma:migrate`
-4. Generate Prisma client:
+5. Generate Prisma client:
    - `pnpm prisma:generate`
-5. Optional demo data:
+6. Optional demo data:
    - `pnpm prisma:seed`
+7. Optional Day 10 embedding demo:
+   - `pnpm embeddings:test`
 
 ## B) What Prisma is doing internally
 
@@ -784,5 +826,11 @@ Implementation note:
 
 ## E) Seed data behavior
 
-- `prisma/seed.js` currently clears existing records and inserts demo project/tickets/comments.
+- `prisma/seed.js` currently clears existing records and inserts a larger practice dataset.
+- It also clears existing embedding rows before reseeding.
+- Current seeded volume:
+  - 3 projects
+  - 24 tickets
+  - 72 comments
 - Use seed when you want a clean practice dataset.
+- Do not run it casually on a database containing anything you want to keep, because it deletes existing records first.

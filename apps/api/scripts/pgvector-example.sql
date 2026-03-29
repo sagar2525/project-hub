@@ -1,5 +1,16 @@
 CREATE EXTENSION IF NOT EXISTS vector;
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
+WITH generated_vector AS (
+  SELECT (
+    '[' ||
+    array_to_string(
+      ARRAY(SELECT '0.001' FROM generate_series(1, 1536)),
+      ','
+    ) ||
+    ']'
+  )::vector AS value
+)
 INSERT INTO "Embedding" (
   "id",
   "content",
@@ -8,22 +19,33 @@ INSERT INTO "Embedding" (
   "sourceId",
   "metadata"
 )
-VALUES (
+SELECT
   gen_random_uuid()::text,
   'Ticket: Fix payment gateway timeout',
-  '[0.12, 0.98, 0.44]'::vector,
+  value,
   'ticket',
   'ticket-id-placeholder',
   '{"projectName":"E-Commerce Platform","ticketTitle":"Fix payment gateway timeout"}'::jsonb
-);
+FROM generated_vector;
 
+WITH query_vector AS (
+  SELECT (
+    '[' ||
+    array_to_string(
+      ARRAY(SELECT '0.001' FROM generate_series(1, 1536)),
+      ','
+    ) ||
+    ']'
+  )::vector AS value
+)
 SELECT
-  "id",
-  "content",
-  "sourceType",
-  "sourceId",
-  "metadata",
-  ("embedding" <=> '[0.11, 0.91, 0.39]'::vector) AS distance
-FROM "Embedding"
-ORDER BY "embedding" <=> '[0.11, 0.91, 0.39]'::vector
+  e."id",
+  e."content",
+  e."sourceType",
+  e."sourceId",
+  e."metadata",
+  (e."embedding" <=> q.value) AS distance
+FROM "Embedding" e
+CROSS JOIN query_vector q
+ORDER BY e."embedding" <=> q.value
 LIMIT 5;

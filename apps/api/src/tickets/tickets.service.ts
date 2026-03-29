@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { Priority, Prisma, Ticket, TicketStatus } from '@prisma/client';
+import { Priority, Prisma, ProjectStatus, Ticket, TicketStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateTicketDto } from './dto/create-ticket.dto';
 import { UpdateTicketDto } from './dto/update-ticket.dto';
@@ -27,6 +27,15 @@ export type TicketListItem = Prisma.TicketGetPayload<{
 export type TicketListQueryResult = Omit<TicketListItem, '_count'> & {
   commentCount: number;
 };
+
+export interface TicketDetailQueryResult extends Ticket {
+  project: {
+    id: string;
+    name: string;
+    status: ProjectStatus;
+  };
+  commentCount: number;
+}
 
 interface FindAllTicketsOptions {
   projectId?: string;
@@ -101,12 +110,32 @@ export class TicketsService {
     }));
   }
 
-  async findOne(id: string): Promise<Ticket> {
-    const ticket = await this.prisma.ticket.findUnique({ where: { id } });
+  async findOne(id: string): Promise<TicketDetailQueryResult> {
+    const ticket = await this.prisma.ticket.findUnique({
+      where: { id },
+      include: {
+        project: {
+          select: {
+            id: true,
+            name: true,
+            status: true,
+          },
+        },
+        _count: {
+          select: {
+            comments: true,
+          },
+        },
+      },
+    });
     if (!ticket) {
       throw new NotFoundException(`Ticket ${id} not found`);
     }
-    return ticket;
+    const { _count, ...ticketWithoutCount } = ticket;
+    return {
+      ...ticketWithoutCount,
+      commentCount: _count.comments,
+    };
   }
 
   async update(id: string, dto: UpdateTicketDto): Promise<Ticket> {

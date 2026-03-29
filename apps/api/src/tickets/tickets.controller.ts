@@ -12,7 +12,11 @@ import {
 import { Priority, Ticket, TicketStatus } from '@prisma/client';
 import { CreateTicketDto } from './dto/create-ticket.dto';
 import { UpdateTicketDto } from './dto/update-ticket.dto';
-import { TicketListQueryResult, TicketsService } from './tickets.service';
+import {
+  TicketDetailQueryResult,
+  TicketListQueryResult,
+  TicketsService,
+} from './tickets.service';
 
 @Controller()
 export class TicketsController {
@@ -61,7 +65,7 @@ export class TicketsController {
   }
 
   @Get('tickets/:id')
-  findOne(@Param('id') id: string): Promise<Ticket> {
+  findOne(@Param('id') id: string): Promise<TicketDetailQueryResult> {
     return this.ticketsService.findOne(id);
   }
 
