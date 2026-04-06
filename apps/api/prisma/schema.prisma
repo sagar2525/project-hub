@@ -54,6 +54,7 @@ model Embedding {
   createdAt  DateTime                  @default(now())
 
   @@index([sourceType, sourceId])
+  @@unique([sourceType, sourceId])
 }
 
 enum ProjectStatus {

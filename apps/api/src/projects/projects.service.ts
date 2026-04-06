@@ -1,6 +1,8 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { Prisma, Project, ProjectStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { EMBEDDING_PROJECT_SYNC_EVENT } from '../embeddings/embedding.events';
 import { CreateProjectDto } from './dto/create-project.dto';
 import { UpdateProjectDto } from './dto/update-project.dto';
 
@@ -28,16 +30,21 @@ export type ProjectListQueryResult = Omit<ProjectListItem, '_count'> & {
 
 @Injectable()
 export class ProjectsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly eventEmitter: EventEmitter2,
+  ) {}
 
-  create(dto: CreateProjectDto): Promise<Project> {
-    return this.prisma.project.create({
+  async create(dto: CreateProjectDto): Promise<Project> {
+    const project = await this.prisma.project.create({
       data: {
         name: dto.name,
         description: dto.description,
         status: dto.status ?? ProjectStatus.ACTIVE,
       },
     });
+    await this.emitProjectSync(project.id, 'project.created');
+    return project;
   }
 
   async findAll(status?: ProjectStatus): Promise<ProjectListQueryResult[]> {
@@ -63,7 +70,7 @@ export class ProjectsService {
 
   async update(id: string, dto: UpdateProjectDto): Promise<Project> {
     await this.findOne(id);
-    return this.prisma.project.update({
+    const project = await this.prisma.project.update({
       where: { id },
       data: {
         name: dto.name,
@@ -71,13 +78,24 @@ export class ProjectsService {
         status: dto.status,
       },
     });
+    await this.emitProjectSync(project.id, 'project.updated');
+    return project;
   }
 
   async archive(id: string): Promise<Project> {
     await this.findOne(id);
-    return this.prisma.project.update({
+    const project = await this.prisma.project.update({
       where: { id },
       data: { status: ProjectStatus.ARCHIVED },
+    });
+    await this.emitProjectSync(project.id, 'project.archived');
+    return project;
+  }
+
+  private async emitProjectSync(projectId: string, reason: string): Promise<void> {
+    await this.eventEmitter.emitAsync(EMBEDDING_PROJECT_SYNC_EVENT, {
+      projectId,
+      reason,
     });
   }
 }

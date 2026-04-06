@@ -1,4 +1,4 @@
-# EXPLANATION: Test and Understand Day 1 to Day 10 (Web + Postman)
+# EXPLANATION: Test and Understand Day 1 to Day 11 (Web + Postman)
 
 This guide is made for your current monorepo:
 - Backend: `apps/api` (NestJS + Prisma + PostgreSQL)
@@ -48,7 +48,7 @@ pnpm prisma:seed
 
 6. One-time setup is complete.
 
-### Day 6 to Day 10 frontend one-time setup
+### Day 6 to Day 11 frontend one-time setup
 
 In a new terminal:
 
@@ -65,7 +65,7 @@ NEXT_PUBLIC_API_URL="http://localhost:3001"
 
 ### Command to run every time (daily startup)
 
-After one-time setup, every time you want to run the full Day 10 application, use two terminals.
+After one-time setup, every time you want to run the full Day 11 application, use two terminals.
 
 Terminal 1 (API):
 
@@ -122,7 +122,7 @@ pnpm dev
 
 You can open these in browser directly:
 
-0. Day 10 frontend dashboard:
+0. Day 11 frontend dashboard:
    - `http://localhost:3000`
 
 1. Day 1 health:
@@ -151,6 +151,9 @@ You can open these in browser directly:
 
 9. Day 6 frontend chat placeholder page:
    - `http://localhost:3000/chat`
+
+10. Day 11 semantic search:
+   - `http://localhost:3001/embeddings/search?q=payment&limit=5`
 
 Important:
 - Browser is not practical for `POST`, `PATCH`, `DELETE`.
@@ -450,7 +453,7 @@ Then verify in browser or Postman:
    - `SELECT * FROM "Embedding";`
    - Table should exist even before you insert embedding rows
 
-## 6A) Day 7 to Day 10 Web Flow Checks
+## 6A) Day 7 to Day 11 Web Flow Checks
 
 Once both API and web are running:
 
@@ -491,6 +494,12 @@ Once both API and web are running:
      - inserts demo rows into `Embedding`
      - runs similarity search against PostgreSQL
 
+7. For Day 11 embedding pipeline verification:
+   - Run `POST /embeddings/sync`
+   - Run `GET /embeddings/search?q=payment issue&limit=5`
+   - Create or update a ticket/comment from the UI or Postman
+   - Run the same search again and confirm results change after CRUD
+
 ## 7) Fast Troubleshooting
 
 1. `P1000` auth error:
@@ -507,7 +516,7 @@ Once both API and web are running:
 
 ## 8) Final Learning Checklist
 
-You fully verified Day 1 to Day 10 if:
+You fully verified Day 1 to Day 11 if:
 - Health works
 - Projects CRUD works
 - Data persists after server restart
@@ -525,6 +534,9 @@ You fully verified Day 1 to Day 10 if:
 - `Embedding` schema and migration files exist for Day 10
 - `pnpm embeddings:test` can generate vectors, store them in PostgreSQL, and query them back with similarity search
 - Gemini verification has been completed against the local PostgreSQL 18.3 setup with pgvector installed
+- `POST /embeddings/sync` embeds all projects, tickets, and comments into pgvector
+- `GET /embeddings/search` returns relevant semantic matches
+- Project, ticket, and comment writes trigger embedding resync events automatically
 
 ## 9) Day-Wise Files, Purpose, and Communication
 
@@ -789,6 +801,44 @@ Implementation note:
   - `pnpm embeddings:test` completes successfully with `gemini-embedding-001`
   - generated vectors are length `3072`
   - similarity search returns the expected authentication-related match near the top
+
+## Day 11 - Embedding Pipeline + Auto-Sync
+
+Files created/updated:
+- `src/embeddings/embeddings.module.ts`
+- `src/embeddings/embeddings.controller.ts`
+- `src/embeddings/embeddings.service.ts`
+- `src/embeddings/embeddings.listener.ts`
+- `src/embeddings/embedding.events.ts`
+- `src/app.module.ts`
+- `src/projects/projects.service.ts`
+- `src/tickets/tickets.service.ts`
+- `src/comments/comments.service.ts`
+- `prisma/schema.prisma`
+- `prisma/migrations/20260406100000_add_embedding_source_unique_constraint/migration.sql`
+
+Purpose:
+- `embeddings.service.ts`: generates Gemini embeddings, formats project/ticket/comment chunks, syncs one project or all projects, upserts rows into `Embedding`, and performs semantic search.
+- `embeddings.controller.ts`: exposes `POST /embeddings/sync`, `POST /embeddings/sync/:projectId`, and `GET /embeddings/search`.
+- `embeddings.listener.ts`: listens for project sync events and re-embeds project data after CRUD changes.
+- `embedding.events.ts`: central event name and payload type for embedding sync events.
+- updated project/ticket/comment services: emit project resync events after create/update/delete style operations.
+- new migration: adds a unique key on `("sourceType", "sourceId")` so embedding rows can be safely upserted.
+
+Communication flow (Day 11 backend):
+1. A client hits `POST /embeddings/sync` or `POST /embeddings/sync/:projectId`.
+2. `EmbeddingsController` calls `EmbeddingsService`.
+3. `EmbeddingsService` loads project data with tickets and comments from Prisma.
+4. The service formats each project, ticket, and comment into meaningful text chunks with metadata.
+5. Gemini embeddings are generated for those chunks.
+6. Existing embeddings for that project are cleared and reinserted/upserted into PostgreSQL.
+7. `GET /embeddings/search?q=...` embeds the query, runs pgvector similarity search, and returns matching chunks.
+8. Separately, project/ticket/comment CRUD operations emit an event that triggers project re-sync automatically.
+
+Implementation note:
+- Day 11 embedding sync and semantic search endpoints are implemented.
+- CRUD writes now emit project sync events through Nest's event emitter.
+- The API build passes with the new Day 11 module.
 
 ## 10) Database Setup and How It Works (Day 3 Onward)
 

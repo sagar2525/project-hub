@@ -1,5 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { Priority, Prisma, ProjectStatus, Ticket, TicketStatus } from '@prisma/client';
+import { EMBEDDING_PROJECT_SYNC_EVENT } from '../embeddings/embedding.events';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateTicketDto } from './dto/create-ticket.dto';
 import { UpdateTicketDto } from './dto/update-ticket.dto';
@@ -47,11 +49,14 @@ interface FindAllTicketsOptions {
 
 @Injectable()
 export class TicketsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly eventEmitter: EventEmitter2,
+  ) {}
 
   async create(projectId: string, dto: CreateTicketDto): Promise<Ticket> {
     await this.ensureProjectExists(projectId);
-    return this.prisma.ticket.create({
+    const ticket = await this.prisma.ticket.create({
       data: {
         projectId,
         title: dto.title,
@@ -60,6 +65,8 @@ export class TicketsService {
         priority: dto.priority ?? Priority.MEDIUM,
       },
     });
+    await this.emitProjectSync(projectId, 'ticket.created');
+    return ticket;
   }
 
   async findByProject(
@@ -139,8 +146,8 @@ export class TicketsService {
   }
 
   async update(id: string, dto: UpdateTicketDto): Promise<Ticket> {
-    await this.findOne(id);
-    return this.prisma.ticket.update({
+    const ticket = await this.findOne(id);
+    const updatedTicket = await this.prisma.ticket.update({
       where: { id },
       data: {
         title: dto.title,
@@ -149,11 +156,15 @@ export class TicketsService {
         priority: dto.priority,
       },
     });
+    await this.emitProjectSync(ticket.projectId, 'ticket.updated');
+    return updatedTicket;
   }
 
   async remove(id: string): Promise<Ticket> {
-    await this.findOne(id);
-    return this.prisma.ticket.delete({ where: { id } });
+    const ticket = await this.findOne(id);
+    const deletedTicket = await this.prisma.ticket.delete({ where: { id } });
+    await this.emitProjectSync(ticket.projectId, 'ticket.deleted');
+    return deletedTicket;
   }
 
   private async ensureProjectExists(projectId: string): Promise<void> {
@@ -176,5 +187,12 @@ export class TicketsService {
     return {
       [sortBy]: sortOrder,
     } as Prisma.TicketOrderByWithRelationInput;
+  }
+
+  private async emitProjectSync(projectId: string, reason: string): Promise<void> {
+    await this.eventEmitter.emitAsync(EMBEDDING_PROJECT_SYNC_EVENT, {
+      projectId,
+      reason,
+    });
   }
 }
