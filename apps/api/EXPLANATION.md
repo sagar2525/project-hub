@@ -1,4 +1,4 @@
-# EXPLANATION: Test and Understand Day 1 to Day 11 (Web + Postman)
+# EXPLANATION: Test and Understand Day 1 to Day 12 (Web + Postman)
 
 This guide is made for your current monorepo:
 - Backend: `apps/api` (NestJS + Prisma + PostgreSQL)
@@ -48,7 +48,7 @@ pnpm prisma:seed
 
 6. One-time setup is complete.
 
-### Day 6 to Day 11 frontend one-time setup
+### Day 6 to Day 12 frontend one-time setup
 
 In a new terminal:
 
@@ -65,7 +65,7 @@ NEXT_PUBLIC_API_URL="http://localhost:3001"
 
 ### Command to run every time (daily startup)
 
-After one-time setup, every time you want to run the full Day 11 application, use two terminals.
+After one-time setup, every time you want to run the full Day 12 application, use two terminals.
 
 Terminal 1 (API):
 
@@ -122,7 +122,7 @@ pnpm dev
 
 You can open these in browser directly:
 
-0. Day 11 frontend dashboard:
+0. Day 12 frontend dashboard:
    - `http://localhost:3000`
 
 1. Day 1 health:
@@ -154,6 +154,9 @@ You can open these in browser directly:
 
 10. Day 11 semantic search:
    - `http://localhost:3001/embeddings/search?q=payment&limit=5`
+
+11. Day 12 chat history:
+   - `http://localhost:3001/chat/history/<session-id>`
 
 Important:
 - Browser is not practical for `POST`, `PATCH`, `DELETE`.
@@ -453,7 +456,7 @@ Then verify in browser or Postman:
    - `SELECT * FROM "Embedding";`
    - Table should exist even before you insert embedding rows
 
-## 6A) Day 7 to Day 11 Web Flow Checks
+## 6A) Day 7 to Day 12 Web Flow Checks
 
 Once both API and web are running:
 
@@ -500,6 +503,12 @@ Once both API and web are running:
    - Create or update a ticket/comment from the UI or Postman
    - Run the same search again and confirm results change after CRUD
 
+8. For Day 12 chat verification:
+   - Run `POST /chat` with `{ "message": "What are the high priority tickets?", "sessionId": "demo-session" }`
+   - Run `GET /chat/history/demo-session`
+   - Ask a follow-up like `Who commented on the payment issue?`
+   - Confirm the response includes retrieved source references
+
 ## 7) Fast Troubleshooting
 
 1. `P1000` auth error:
@@ -516,7 +525,7 @@ Once both API and web are running:
 
 ## 8) Final Learning Checklist
 
-You fully verified Day 1 to Day 11 if:
+You fully verified Day 1 to Day 12 if:
 - Health works
 - Projects CRUD works
 - Data persists after server restart
@@ -537,6 +546,9 @@ You fully verified Day 1 to Day 11 if:
 - `POST /embeddings/sync` embeds all projects, tickets, and comments into pgvector
 - `GET /embeddings/search` returns relevant semantic matches
 - Project, ticket, and comment writes trigger embedding resync events automatically
+- `POST /chat` answers with retrieved project context and source references
+- `GET /chat/history/:sessionId` returns persisted conversation history
+- `DELETE /chat/history/:sessionId` clears one conversation
 
 ## 9) Day-Wise Files, Purpose, and Communication
 
@@ -839,6 +851,38 @@ Implementation note:
 - Day 11 embedding sync and semantic search endpoints are implemented.
 - CRUD writes now emit project sync events through Nest's event emitter.
 - The API build passes with the new Day 11 module.
+
+## Day 12 - RAG Chat Endpoint
+
+Files created/updated:
+- `src/chat/chat.module.ts`
+- `src/chat/chat.controller.ts`
+- `src/chat/chat.service.ts`
+- `src/chat/dto/create-chat.dto.ts`
+- `src/app.module.ts`
+- `prisma/schema.prisma`
+- `prisma/migrations/20260406120000_add_chat_messages/migration.sql`
+
+Purpose:
+- `chat.service.ts`: loads recent chat history, rewrites follow-up questions into standalone questions, retrieves relevant embedding chunks, generates a Gemini answer, and stores user/assistant messages in the database.
+- `chat.controller.ts`: exposes `POST /chat`, `GET /chat/history/:sessionId`, and `DELETE /chat/history/:sessionId`.
+- `create-chat.dto.ts`: validates the chat input payload.
+- schema + migration: add the `ChatMessage` table for persisted conversation history and source metadata.
+
+Communication flow (Day 12 backend):
+1. Client sends `POST /chat` with `message` and `sessionId`.
+2. `ChatService` loads the last 10 messages for that session.
+3. Gemini rewrites the question into a standalone form when needed.
+4. The standalone question is sent through Day 11 semantic search.
+5. Retrieved chunks are injected into the answer prompt.
+6. Gemini generates the final answer.
+7. The service stores both the user message and assistant response in `ChatMessage`.
+8. The API returns the answer plus source references.
+
+Implementation note:
+- Day 12 backend chat endpoints are implemented with Gemini instead of OpenAI.
+- The chat flow depends on Day 11 embeddings already being synced.
+- The API build passes with the new chat module.
 
 ## 10) Database Setup and How It Works (Day 3 Onward)
 
