@@ -5,10 +5,15 @@ import { ApiError, getProjectById, getTicketsByProject } from '@/lib/api';
 
 interface ProjectPageProps {
   params: Promise<{ projectId: string }>;
+  searchParams: Promise<{ ticketId?: string }>;
 }
 
-export default async function ProjectDetailPage({ params }: ProjectPageProps) {
+export default async function ProjectDetailPage({
+  params,
+  searchParams,
+}: ProjectPageProps) {
   const { projectId } = await params;
+  const { ticketId } = await searchParams;
 
   try {
     const project = await getProjectById(projectId);
@@ -32,6 +37,14 @@ export default async function ProjectDetailPage({ params }: ProjectPageProps) {
               <ProjectDetailActions project={project} />
             </div>
           </div>
+          <div className="mt-4">
+            <Link
+              href={`/chat?prompt=${encodeURIComponent(`Tell me about the project ${project.name}`)}`}
+              className="inline-flex rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-700 transition hover:border-slate-400 hover:text-slate-900"
+            >
+              Ask AI About This Project
+            </Link>
+          </div>
         </header>
 
         <div>
@@ -41,7 +54,11 @@ export default async function ProjectDetailPage({ params }: ProjectPageProps) {
               <p className="mt-2 text-sm">{ticketsResult.error}</p>
             </div>
           ) : (
-            <TicketBoard projectId={project.id} initialTickets={ticketsResult.tickets} />
+            <TicketBoard
+              projectId={project.id}
+              initialTickets={ticketsResult.tickets}
+              initialSelectedTicketId={ticketId}
+            />
           )}
         </div>
 

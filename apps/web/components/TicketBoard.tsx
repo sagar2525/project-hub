@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ApiError,
@@ -39,6 +40,7 @@ const priorityClasses: Record<Ticket['priority'], string> = {
 interface TicketBoardProps {
   projectId: string;
   initialTickets: TicketSummary[];
+  initialSelectedTicketId?: string;
 }
 
 function toTicketSummary(ticket: Ticket, previous?: TicketSummary | null): TicketSummary {
@@ -48,9 +50,15 @@ function toTicketSummary(ticket: Ticket, previous?: TicketSummary | null): Ticke
   };
 }
 
-export function TicketBoard({ projectId, initialTickets }: TicketBoardProps) {
+export function TicketBoard({
+  projectId,
+  initialTickets,
+  initialSelectedTicketId,
+}: TicketBoardProps) {
   const [tickets, setTickets] = useState(initialTickets);
-  const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null);
+  const [selectedTicketId, setSelectedTicketId] = useState<string | null>(
+    initialSelectedTicketId ?? null,
+  );
   const [statusFilter, setStatusFilter] = useState<Ticket['status'] | 'ALL'>('ALL');
   const [priorityFilter, setPriorityFilter] = useState<Ticket['priority'] | 'ALL'>('ALL');
   const [sortBy, setSortBy] = useState<'createdAt' | 'updatedAt' | 'priority'>('createdAt');
@@ -76,9 +84,12 @@ export function TicketBoard({ projectId, initialTickets }: TicketBoardProps) {
         }
 
         setTickets(nextTickets);
-        setSelectedTicketId((current) =>
-          current && nextTickets.some((ticket) => ticket.id === current) ? current : null,
-        );
+        setSelectedTicketId((current) => {
+          const candidate = current ?? initialSelectedTicketId ?? null;
+          return candidate && nextTickets.some((ticket) => ticket.id === candidate)
+            ? candidate
+            : null;
+        });
       })
       .catch((error) => {
         if (!active) {
@@ -100,7 +111,14 @@ export function TicketBoard({ projectId, initialTickets }: TicketBoardProps) {
     return () => {
       active = false;
     };
-  }, [priorityFilter, projectId, sortBy, sortOrder, statusFilter]);
+  }, [
+    initialSelectedTicketId,
+    priorityFilter,
+    projectId,
+    sortBy,
+    sortOrder,
+    statusFilter,
+  ]);
 
   const selectedTicket = useMemo(
     () => tickets.find((ticket) => ticket.id === selectedTicketId) ?? null,
@@ -598,6 +616,13 @@ function TicketDetailPanel({
       </p>
 
       <TicketComments ticketId={ticket.id} onCommentCountChange={onCommentCountChange} />
+
+      <Link
+        href={`/chat?prompt=${encodeURIComponent(`Tell me about ticket ${ticket.title}`)}`}
+        className="inline-flex rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition hover:border-slate-400 hover:text-slate-900"
+      >
+        Ask AI About This Ticket
+      </Link>
 
       {error ? (
         <p className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">

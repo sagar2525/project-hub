@@ -2,7 +2,7 @@ import Link from 'next/link';
 
 const navItems = [
   { href: '/', label: 'Projects Dashboard' },
-  { href: '/chat', label: 'AI Chat (Later)' },
+  { href: '/chat', label: 'AI Chat' },
 ];
 
 export function Sidebar() {
@@ -26,7 +26,7 @@ export function Sidebar() {
       </nav>
 
       <p className="mt-8 text-xs text-slate-500">
-        Day 6 goal: show projects from API in a simple dashboard.
+        Day 13 goal: chat with project data and navigate to cited tickets.
       </p>
     </aside>
   );

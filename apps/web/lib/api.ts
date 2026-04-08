@@ -82,7 +82,31 @@ export interface CommentPayload {
   content?: string;
 }
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
+export interface ChatSourceReference {
+  sourceType: string;
+  sourceId: string;
+  snippet: string;
+  metadata: Record<string, unknown> | null;
+  distance: number;
+}
+
+export interface ChatReply {
+  response: string;
+  sources: ChatSourceReference[];
+  sessionId: string;
+}
+
+export interface ChatMessage {
+  id: string;
+  role: 'user' | 'assistant' | string;
+  content: string;
+  sources: unknown;
+  sessionId: string;
+  createdAt: string;
+}
+
+export const API_BASE_URL =
+  process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
 
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const headers = new Headers(options.headers);
@@ -231,6 +255,28 @@ export async function updateProject(
 
 export async function archiveProject(projectId: string): Promise<Project> {
   return request<Project>(`/projects/${projectId}`, {
+    method: 'DELETE',
+  });
+}
+
+export async function sendChatMessage(
+  message: string,
+  sessionId: string,
+): Promise<ChatReply> {
+  return request<ChatReply>('/chat', {
+    method: 'POST',
+    body: { message, sessionId },
+  });
+}
+
+export async function getChatHistory(sessionId: string): Promise<ChatMessage[]> {
+  return request<ChatMessage[]>(`/chat/history/${sessionId}`);
+}
+
+export async function clearChatHistory(
+  sessionId: string,
+): Promise<{ deleted: number }> {
+  return request<{ deleted: number }>(`/chat/history/${sessionId}`, {
     method: 'DELETE',
   });
 }

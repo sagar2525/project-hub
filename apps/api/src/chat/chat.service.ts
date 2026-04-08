@@ -33,40 +33,34 @@ export class ChatService {
   ) {}
 
   async chat(message: string, sessionId: string): Promise<ChatReply> {
-    const history = await this.getRecentHistory(sessionId);
-    const standaloneQuestion = await this.rewriteQuestion(message, history);
-    const retrievedChunks = await this.embeddingsService.search(
-      standaloneQuestion,
-      5,
-    );
-    const sources = this.toSourceReferences(retrievedChunks);
+    const context = await this.prepareChatContext(message, sessionId);
     const answer = await this.generateAnswer(
-      standaloneQuestion,
-      history,
-      retrievedChunks,
+      context.standaloneQuestion,
+      context.history,
+      context.retrievedChunks,
     );
 
-    await this.prisma.chatMessage.createMany({
-      data: [
-        {
-          role: 'user',
-          content: message,
-          sessionId,
-        },
-        {
-          role: 'assistant',
-          content: answer,
-          sessionId,
-          sources: sources as unknown as Prisma.InputJsonValue,
-        },
-      ],
-    });
+    await this.persistConversation(message, sessionId, answer, context.sources);
 
-    return {
-      response: answer,
-      sources,
-      sessionId,
-    };
+    return this.toChatReply(answer, context.sources, sessionId);
+  }
+
+  async streamChat(
+    message: string,
+    sessionId: string,
+    onToken: (token: string) => void | Promise<void>,
+  ): Promise<ChatReply> {
+    const context = await this.prepareChatContext(message, sessionId);
+    const answer = await this.generateAnswerStream(
+      context.standaloneQuestion,
+      context.history,
+      context.retrievedChunks,
+      onToken,
+    );
+
+    await this.persistConversation(message, sessionId, answer, context.sources);
+
+    return this.toChatReply(answer, context.sources, sessionId);
   }
 
   async getHistory(sessionId: string): Promise<ChatMessage[]> {
@@ -170,6 +164,41 @@ export class ChatService {
     return answerText;
   }
 
+  private async generateAnswerStream(
+    standaloneQuestion: string,
+    history: ChatMessage[],
+    retrievedChunks: EmbeddingSearchResult[],
+    onToken: (token: string) => void | Promise<void>,
+  ): Promise<string> {
+    const promptMessages = this.buildPromptMessages(
+      standaloneQuestion,
+      history,
+      retrievedChunks,
+    );
+    const answerModel = this.createChatModel();
+    const stream = await answerModel.stream(promptMessages);
+
+    let answerText = '';
+    for await (const chunk of stream) {
+      const text = this.extractText(chunk.content);
+      if (!text) {
+        continue;
+      }
+
+      answerText += text;
+      await onToken(text);
+    }
+
+    const trimmed = answerText.trim();
+    if (!trimmed) {
+      throw new InternalServerErrorException(
+        'Chat model returned an empty streamed response.',
+      );
+    }
+
+    return trimmed;
+  }
+
   private createChatModel(): ChatGoogleGenerativeAI {
     const apiKey = process.env.GEMINI_API_KEY ?? process.env.GOOGLE_API_KEY;
 
@@ -209,5 +238,100 @@ export class ChatService {
       metadata: chunk.metadata,
       distance: chunk.distance,
     }));
+  }
+
+  private async prepareChatContext(message: string, sessionId: string): Promise<{
+    history: ChatMessage[];
+    standaloneQuestion: string;
+    retrievedChunks: EmbeddingSearchResult[];
+    sources: ChatSourceReference[];
+  }> {
+    const history = await this.getRecentHistory(sessionId);
+    const standaloneQuestion = await this.rewriteQuestion(message, history);
+    const retrievedChunks = await this.embeddingsService.search(
+      standaloneQuestion,
+      5,
+    );
+
+    return {
+      history,
+      standaloneQuestion,
+      retrievedChunks,
+      sources: this.toSourceReferences(retrievedChunks),
+    };
+  }
+
+  private buildPromptMessages(
+    standaloneQuestion: string,
+    history: ChatMessage[],
+    retrievedChunks: EmbeddingSearchResult[],
+  ): Array<SystemMessage | HumanMessage> {
+    const context = retrievedChunks.length
+      ? retrievedChunks
+          .map(
+            (chunk, index) =>
+              `Source ${index + 1}\nType: ${chunk.sourceType}\nSource ID: ${chunk.sourceId}\nMetadata: ${JSON.stringify(chunk.metadata ?? {})}\nContent:\n${chunk.content}`,
+          )
+          .join('\n\n')
+      : 'No relevant project data was retrieved.';
+
+    const historyText = history.length
+      ? history
+          .map((item) => `${item.role.toUpperCase()}: ${item.content}`)
+          .join('\n')
+      : 'No prior chat history.';
+
+    return [
+      new SystemMessage(
+        [
+          'You are a helpful project management assistant.',
+          'Answer questions only from the provided project context.',
+          'If the information is not present in the context, say: "I don\'t have information about that in the project data."',
+          'When possible, mention the relevant project, ticket, or comment in the answer.',
+        ].join(' '),
+      ),
+      new HumanMessage(
+        [
+          `Context:\n${context}`,
+          `Chat History:\n${historyText}`,
+          `Question:\n${standaloneQuestion}`,
+        ].join('\n\n'),
+      ),
+    ];
+  }
+
+  private async persistConversation(
+    message: string,
+    sessionId: string,
+    answer: string,
+    sources: ChatSourceReference[],
+  ): Promise<void> {
+    await this.prisma.chatMessage.createMany({
+      data: [
+        {
+          role: 'user',
+          content: message,
+          sessionId,
+        },
+        {
+          role: 'assistant',
+          content: answer,
+          sessionId,
+          sources: sources as unknown as Prisma.InputJsonValue,
+        },
+      ],
+    });
+  }
+
+  private toChatReply(
+    answer: string,
+    sources: ChatSourceReference[],
+    sessionId: string,
+  ): ChatReply {
+    return {
+      response: answer,
+      sources,
+      sessionId,
+    };
   }
 }
